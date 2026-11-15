@@ -28,3 +28,6 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Backend Server running on port ${PORT}`);
 });
+app.get('/', (req, res) => {
+  res.json({ status: 'OK', message: 'Backend API Nha2Dua đang hoạt động!' });
+});
