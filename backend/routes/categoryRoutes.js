@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 
-// 1. READ ALL: Lấy danh sách danh mục theo thứ tự ID tăng dần (1, 2, 3...)
+// 1. READ ALL: Sắp xếp tăng dần 1, 2, 3...
 router.get('/', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM categories ORDER BY id ASC');
@@ -12,14 +12,13 @@ router.get('/', async (req, res) => {
   }
 });
 
-// 2. CREATE: Thêm danh mục mới với ID liền kề (không bị nhảy số trên TiDB)
+// 2. CREATE: Luôn lấy ID liền kề (MAX(id) + 1), bảng trống thì bắt đầu từ 1
 router.post('/', async (req, res) => {
   const { name, slug, parent_id } = req.body;
   if (!name || !slug) {
     return res.status(400).json({ success: false, message: 'Vui lòng nhập name và slug' });
   }
   try {
-    // Lấy ID tiếp theo = MAX(id) + 1 (nếu bảng trống thì bắt đầu từ 1)
     const [maxRows] = await db.query('SELECT COALESCE(MAX(id), 0) + 1 AS nextId FROM categories');
     const nextId = maxRows[0].nextId;
 
@@ -33,7 +32,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// 3. UPDATE: Sửa danh mục theo ID
+// 3. UPDATE: Sửa danh mục
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { name, slug, parent_id } = req.body;
@@ -51,7 +50,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// 4. DELETE: Xóa danh mục và dồn lại ID các dòng phía sau
+// 4. DELETE: Xóa danh mục, dồn lại ID phía sau và reset AUTO_INCREMENT trên MySQL
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -60,11 +59,14 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Không tìm thấy danh mục' });
     }
 
-    // Dồn lại ID của các danh mục nằm sau mục vừa xóa (ví dụ xóa 2 thì 3 thành 2)
     try {
+      // Dồn lại ID các dòng phía sau trong MySQL 8
       await db.query('UPDATE categories SET id = id - 1 WHERE id > ? ORDER BY id ASC', [id]);
+      // Đưa bộ đếm AUTO_INCREMENT của Aiven MySQL về đúng số tiếp theo
+      const [maxRows] = await db.query('SELECT COALESCE(MAX(id), 0) + 1 AS nextId FROM categories');
+      await db.query(`ALTER TABLE categories AUTO_INCREMENT = ${Number(maxRows[0].nextId)}`);
     } catch (reIndexErr) {
-      // Bỏ qua nếu có danh mục con hoặc sản phẩm đang tham chiếu khóa ngoại tới ID cũ
+      // Bỏ qua nếu có khóa ngoại từ bảng con đang tham chiếu
     }
 
     res.json({ success: true, message: 'Xóa thành công' });
