@@ -3,7 +3,6 @@ const cors = require('cors');
 require('dotenv').config();
 const db = require('./config/db');
 
-// Import route vừa tạo
 const categoryRoutes = require('./routes/categoryRoutes');
 
 const app = express();
@@ -11,7 +10,11 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Route kiểm tra sức khỏe hệ thống hiện tại
+// Route trang chủ của Backend (phải đặt trước app.listen)
+app.get('/', (req, res) => {
+  res.json({ status: 'OK', message: 'Backend API Furniture Shop đang hoạt động!' });
+});
+
 app.get('/api/health', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT 1 + 1 AS result');
@@ -21,13 +24,9 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Nhúng các route CRUD của categories vào URL /api/categories
 app.use('/api/categories', categoryRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Backend Server running on port ${PORT}`);
-});
-app.get('/', (req, res) => {
-  res.json({ status: 'OK', message: 'Backend API Nha2Dua đang hoạt động!' });
 });
