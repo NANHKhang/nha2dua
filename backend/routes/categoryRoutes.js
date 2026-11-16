@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 
-// 1. READ ALL: Sắp xếp tăng dần 1, 2, 3...
+// GET: Lấy toàn bộ danh mục từ Aiven trả về JSON cho Frontend
 router.get('/', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM categories ORDER BY id ASC');
@@ -12,11 +12,11 @@ router.get('/', async (req, res) => {
   }
 });
 
-// 2. CREATE: Luôn lấy ID liền kề (MAX(id) + 1), bảng trống thì bắt đầu từ 1
+// POST: Nhận dữ liệu từ Frontend và lưu vào Aiven
 router.post('/', async (req, res) => {
   const { name, slug, parent_id } = req.body;
   if (!name || !slug) {
-    return res.status(400).json({ success: false, message: 'Vui lòng nhập name và slug' });
+    return res.status(400).json({ success: false, message: 'Thiếu name hoặc slug' });
   }
   try {
     const [maxRows] = await db.query('SELECT COALESCE(MAX(id), 0) + 1 AS nextId FROM categories');
@@ -32,7 +32,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// 3. UPDATE: Sửa danh mục
+// PUT: Cập nhật dòng dữ liệu trên Aiven
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { name, slug, parent_id } = req.body;
@@ -50,7 +50,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// 4. DELETE: Xóa danh mục, dồn lại ID phía sau và reset AUTO_INCREMENT trên MySQL
+// DELETE: Xóa dữ liệu trên Aiven và dồn lại ID
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -60,14 +60,10 @@ router.delete('/:id', async (req, res) => {
     }
 
     try {
-      // Dồn lại ID các dòng phía sau trong MySQL 8
       await db.query('UPDATE categories SET id = id - 1 WHERE id > ? ORDER BY id ASC', [id]);
-      // Đưa bộ đếm AUTO_INCREMENT của Aiven MySQL về đúng số tiếp theo
       const [maxRows] = await db.query('SELECT COALESCE(MAX(id), 0) + 1 AS nextId FROM categories');
       await db.query(`ALTER TABLE categories AUTO_INCREMENT = ${Number(maxRows[0].nextId)}`);
-    } catch (reIndexErr) {
-      // Bỏ qua nếu có khóa ngoại từ bảng con đang tham chiếu
-    }
+    } catch (e) {}
 
     res.json({ success: true, message: 'Xóa thành công' });
   } catch (error) {

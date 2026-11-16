@@ -1,32 +1,25 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const db = require('./config/db');
-
 const categoryRoutes = require('./routes/categoryRoutes');
 
 const app = express();
 
 app.use(express.json());
-app.use(cors());
+// Cho phép Frontend trên Vercel và Local gọi API
+app.use(cors({
+  origin: ['https://nha2dua.vercel.app', 'http://localhost:5173']
+}));
 
-// Route trang chủ của Backend (phải đặt trước app.listen)
+// Thông báo trạng thái server (không trả dữ liệu nghiệp vụ ở đây)
 app.get('/', (req, res) => {
-  res.json({ status: 'OK', message: 'Backend API Furniture Shop đang hoạt động!' });
+  res.json({ status: 'OK', message: 'API Server is running' });
 });
 
-app.get('/api/health', async (req, res) => {
-  try {
-    const [rows] = await db.query('SELECT 1 + 1 AS result');
-    res.json({ message: 'Backend & CSDL hoạt động bình thường!', data: rows });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
+// Cổng API chính cung cấp dữ liệu JSON cho Frontend
 app.use('/api/categories', categoryRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Backend Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
