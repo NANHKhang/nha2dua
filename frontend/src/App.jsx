@@ -3,19 +3,32 @@ import UserLayout from './layouts/UserLayout';
 import AdminLayout from './layouts/AdminLayout';
 
 export default function App() {
-  // 'user' = Giao diện cửa hàng khách hàng, 'admin' = Giao diện quản trị viên
-  const [layout, setLayout] = useState('user');
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('furniture_user');
+    return saved ? JSON.parse(saved) : null;
+  });
 
-  if (layout === 'admin') {
-    return <AdminLayout onSwitchToUser={() => setLayout('user')} />;
+  const handleLoginSuccess = (user) => {
+    localStorage.setItem('furniture_user', JSON.stringify(user));
+    setCurrentUser(user);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('furniture_user');
+    setCurrentUser(null);
+  };
+
+  const isAdmin = currentUser && (Number(currentUser.role_id) === 2 || currentUser.role_name === 'admin');
+
+  if (isAdmin) {
+    return <AdminLayout currentUser={currentUser} onLogout={handleLogout} />;
   }
 
   return (
     <UserLayout
       currentUser={currentUser}
-      setCurrentUser={setCurrentUser}
-      onSwitchToAdmin={() => setLayout('admin')}
+      onLoginSuccess={handleLoginSuccess}
+      onLogout={handleLogout}
     />
   );
 }

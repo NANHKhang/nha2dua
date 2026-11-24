@@ -1,19 +1,17 @@
 import { useState, useEffect } from 'react';
 import API from '../api/axios';
 
-export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmin }) {
+export default function UserLayout({ currentUser, onLoginSuccess, onLogout }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Giỏ hàng & Modal
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
 
-  // Form đặt hàng
   const [orderForm, setOrderForm] = useState({
     receiver_name: currentUser?.full_name || '',
     receiver_phone: currentUser?.phone || '',
@@ -22,14 +20,12 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
     note: ''
   });
 
-  // Form đăng nhập / đăng ký
   const [isRegister, setIsRegister] = useState(false);
-  const [authForm, setAuthForm] = useState({ email: 'nguyenvana@gmail.com', password: '123', full_name: '', phone: '' });
+  const [authForm, setAuthForm] = useState({ email: '', password: '', full_name: '', phone: '' });
 
   useEffect(() => {
     Promise.all([API.get('/api/products'), API.get('/api/categories')]).then(([pRes, cRes]) => {
       if (pRes.data.success) {
-        // Chỉ hiển thị sản phẩm đang hoạt động (is_active === 1) cho khách
         setProducts(pRes.data.data.filter((p) => p.is_active === 1));
       }
       if (cRes.data.success) setCategories(cRes.data.data);
@@ -46,14 +42,12 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
     }
   }, [currentUser]);
 
-  // Lọc sản phẩm theo danh mục & từ khóa tìm kiếm
   const filteredProducts = products.filter((p) => {
     const matchCat = selectedCategory === 'all' || Number(p.category_id) === Number(selectedCategory);
     const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchCat && matchSearch;
   });
 
-  // Thêm vào giỏ hàng
   const addToCart = (product) => {
     if (product.stock_quantity <= 0) return alert('Sản phẩm tạm hết hàng!');
     setCart((prev) => {
@@ -76,12 +70,16 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
   const totalCartItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalCartPrice = cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
 
-  // Gửi đơn hàng lên Backend
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
+    if (!currentUser) {
+      setShowCart(false);
+      setShowAuth(true);
+      return alert('Vui lòng đăng nhập tài khoản khách hàng trước khi đặt hàng!');
+    }
     try {
       const res = await API.post('/api/orders', {
-        user_id: currentUser?.id || 2,
+        user_id: currentUser.id,
         ...orderForm,
         items: cart
       });
@@ -95,16 +93,15 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
     }
   };
 
-  // Xử lý Đăng nhập / Đăng ký
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     try {
       const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
       const res = await API.post(endpoint, authForm);
       if (res.data.success) {
-        setCurrentUser(res.data.user);
         setShowAuth(false);
-        alert(`Xin chào, ${res.data.user.full_name}!`);
+        setAuthForm({ email: '', password: '', full_name: '', phone: '' });
+        onLoginSuccess(res.data.user);
       }
     } catch (err) {
       alert(err.response?.data?.message || err.message);
@@ -113,14 +110,13 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc', color: '#1e293b' }}>
-      {/* HEADER USER */}
+      {/* HEADER USER (KHÔNG CÓ NÚT ADMIN) */}
       <header style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: '1rem 2rem', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#0f172a' }}>
             Nha2Dua <span style={{ color: '#2563eb' }}>Furniture</span>
           </div>
 
-          {/* Thanh tìm kiếm */}
           <input
             type="text"
             placeholder="Tìm kiếm bàn, ghế, sofa..."
@@ -129,7 +125,6 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
             style={{ padding: '0.5rem 1rem', borderRadius: '20px', border: '1px solid #cbd5e1', width: '300px' }}
           />
 
-          {/* Các nút thao tác phải */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <button
               onClick={() => setShowCart(true)}
@@ -139,49 +134,40 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
             </button>
 
             {currentUser ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
-                <span>Chào, <strong>{currentUser.full_name}</strong></span>
-                <button onClick={() => setCurrentUser(null)} style={{ padding: '0.35rem 0.6rem', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer' }}>
-                  Thoát
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem' }}>
+                <span>Xin chào, <strong>{currentUser.full_name}</strong></span>
+                <button
+                  onClick={onLogout}
+                  style={{ padding: '0.4rem 0.75rem', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+                >
+                  Đăng xuất
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => setShowAuth(true)}
-                style={{ padding: '0.5rem 1rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}
+                style={{ padding: '0.5rem 1rem', backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
               >
                 Đăng nhập
               </button>
             )}
-
-            {/* Nút chuyển nhanh sang Layout Admin để giảng viên chấm bài */}
-            <button
-              onClick={onSwitchToAdmin}
-              style={{ padding: '0.5rem 1rem', backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
-            >
-              Vào Trang Admin &rarr;
-            </button>
           </div>
         </div>
       </header>
 
-      {/* BANNER GIỚI THIỆU */}
+      {/* BANNER */}
       <section style={{ backgroundColor: '#1e293b', color: '#fff', padding: '2.5rem 2rem', textAlign: 'center' }}>
         <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Nội Thất Hiện Đại Cho Không Gian Sống</h1>
         <p style={{ color: '#cbd5e1' }}>Thiết kế tối giản — Chất liệu gỗ tự nhiên bền bỉ — Giao hàng tận nơi</p>
       </section>
 
-      {/* NỘI DUNG CỬA HÀNG */}
+      {/* DANH SÁCH SẢN PHẨM */}
       <main style={{ maxWidth: '1200px', width: '100%', margin: '2rem auto', padding: '0 1.5rem', flex: 1 }}>
-        {/* Bộ lọc danh mục */}
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
           <button
             onClick={() => setSelectedCategory('all')}
             style={{
-              padding: '0.45rem 1rem',
-              borderRadius: '20px',
-              border: '1px solid #cbd5e1',
-              cursor: 'pointer',
+              padding: '0.45rem 1rem', borderRadius: '20px', border: '1px solid #cbd5e1', cursor: 'pointer',
               backgroundColor: selectedCategory === 'all' ? '#2563eb' : '#fff',
               color: selectedCategory === 'all' ? '#fff' : '#334155'
             }}
@@ -193,10 +179,7 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
               style={{
-                padding: '0.45rem 1rem',
-                borderRadius: '20px',
-                border: '1px solid #cbd5e1',
-                cursor: 'pointer',
+                padding: '0.45rem 1rem', borderRadius: '20px', border: '1px solid #cbd5e1', cursor: 'pointer',
                 backgroundColor: Number(selectedCategory) === cat.id ? '#2563eb' : '#fff',
                 color: Number(selectedCategory) === cat.id ? '#fff' : '#334155'
               }}
@@ -206,7 +189,6 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
           ))}
         </div>
 
-        {/* Lưới sản phẩm */}
         {filteredProducts.length === 0 ? (
           <p style={{ textAlign: 'center', color: '#64748b', padding: '3rem' }}>Không tìm thấy sản phẩm phù hợp.</p>
         ) : (
@@ -222,10 +204,7 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
                 <div style={{ padding: '1.25rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
                     <span style={{ fontSize: '0.75rem', color: '#2563eb', fontWeight: '600' }}>{p.category_name}</span>
-                    <h3
-                      onClick={() => setSelectedProduct(p)}
-                      style={{ fontSize: '1.05rem', margin: '0.35rem 0', cursor: 'pointer' }}
-                    >
+                    <h3 onClick={() => setSelectedProduct(p)} style={{ fontSize: '1.05rem', margin: '0.35rem 0', cursor: 'pointer' }}>
                       {p.name}
                     </h3>
                     <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#dc2626', marginBottom: '0.5rem' }}>
@@ -256,9 +235,8 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
         )}
       </main>
 
-      {/* FOOTER USER */}
       <footer style={{ backgroundColor: '#0f172a', color: '#94a3b8', textAlign: 'center', padding: '1.5rem', marginTop: '3rem' }}>
-        © 2026 Nha2Dua Furniture — Đồ án Website Bán Nội Thất (React + Node.js + MySQL)
+        © 2026 Nha2Dua Furniture — Đồ án Website Bán Nội Thất
       </footer>
 
       {/* MODAL CHI TIẾT SẢN PHẨM */}
@@ -285,7 +263,7 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
         </div>
       )}
 
-      {/* MODAL GIỎ HÀNG & ĐẶT HÀNG */}
+      {/* MODAL GIỎ HÀNG */}
       {showCart && (
         <div style={modalOverlayStyle}>
           <div style={{ ...modalBoxStyle, maxWidth: '600px' }}>
@@ -316,7 +294,6 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
                   Tổng thanh toán: {totalCartPrice.toLocaleString('vi-VN')} đ
                 </div>
 
-                {/* Form thông tin giao hàng */}
                 <form onSubmit={handlePlaceOrder} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
                   <input required placeholder="Họ tên người nhận *" value={orderForm.receiver_name} onChange={(e) => setOrderForm({ ...orderForm, receiver_name: e.target.value })} style={modalInputStyle} />
                   <input required placeholder="Số điện thoại nhận hàng *" value={orderForm.receiver_phone} onChange={(e) => setOrderForm({ ...orderForm, receiver_phone: e.target.value })} style={modalInputStyle} />
@@ -341,7 +318,7 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
         <div style={modalOverlayStyle}>
           <div style={modalBoxStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <h3>{isRegister ? 'Đăng ký tài khoản' : 'Đăng nhập hệ thống'}</h3>
+              <h3>{isRegister ? 'Đăng ký tài khoản khách hàng' : 'Đăng nhập hệ thống'}</h3>
               <button onClick={() => setShowAuth(false)} style={closeBtnStyle}>X</button>
             </div>
             <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -361,8 +338,9 @@ export default function UserLayout({ currentUser, setCurrentUser, onSwitchToAdmi
               <button type="button" onClick={() => setIsRegister(!isRegister)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', textDecoration: 'underline' }}>
                 {isRegister ? 'Đã có tài khoản? Đăng nhập ngay' : 'Chưa có tài khoản? Đăng ký mới'}
               </button>
-              <div style={{ marginTop: '0.5rem', color: '#64748b' }}>
-                (Email mẫu test: <code>nguyenvana@gmail.com</code> hoặc <code>admin@furnitureshop.vn</code>)
+              <div style={{ marginTop: '0.65rem', color: '#64748b', lineHeight: '1.5' }}>
+                <div>Tài khoản Khách: <code>nguyenvana@gmail.com</code> / <code>123456</code></div>
+                <div>Tài khoản Admin: <code>admin@furnitureshop.vn</code> / <code>123456</code></div>
               </div>
             </div>
           </div>

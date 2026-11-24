@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import API from '../api/axios';
 
 const toSlug = (str) =>
   str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
 
-export default function AdminLayout({ onSwitchToUser }) {
+export default function AdminLayout({ currentUser, onLogout }) {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const menus = [
@@ -19,9 +19,13 @@ export default function AdminLayout({ onSwitchToUser }) {
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f1f5f9', color: '#1e293b' }}>
       <aside style={{ width: '260px', backgroundColor: '#0f172a', color: '#fff', padding: '1.5rem 1rem', flexShrink: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: '1.3rem', fontWeight: 'bold', padding: '0 0.75rem 1.5rem', borderBottom: '1px solid #334155', marginBottom: '1.5rem' }}>
+          <div style={{ fontSize: '1.3rem', fontWeight: 'bold', padding: '0 0.75rem 1rem', borderBottom: '1px solid #334155', marginBottom: '1rem' }}>
             Furniture Admin
+            <div style={{ fontSize: '0.8rem', fontWeight: 'normal', color: '#94a3b8', marginTop: '0.35rem' }}>
+              Xin chào, {currentUser?.full_name || 'Admin'}
+            </div>
           </div>
+
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {menus.map((m) => (
               <button
@@ -45,12 +49,11 @@ export default function AdminLayout({ onSwitchToUser }) {
           </nav>
         </div>
 
-        {/* Nút chuyển về giao diện User */}
         <button
-          onClick={onSwitchToUser}
-          style={{ marginTop: '2rem', padding: '0.7rem', backgroundColor: '#334155', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
+          onClick={onLogout}
+          style={{ marginTop: '2rem', padding: '0.7rem', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
         >
-          &larr; Về Trang Khách Hàng
+          Đăng xuất
         </button>
       </aside>
 
@@ -95,11 +98,7 @@ function DashboardView() {
         <table style={tableStyle}>
           <thead>
             <tr style={theadStyle}>
-              <th style={thStyle}>Mã đơn</th>
-              <th style={thStyle}>Người nhận</th>
-              <th style={thStyle}>Tổng tiền</th>
-              <th style={thStyle}>Thanh toán</th>
-              <th style={thStyle}>Trạng thái</th>
+              <th style={thStyle}>Mã đơn</th><th style={thStyle}>Người nhận</th><th style={thStyle}>Tổng tiền</th><th style={thStyle}>Thanh toán</th><th style={thStyle}>Trạng thái</th>
             </tr>
           </thead>
           <tbody>
@@ -188,38 +187,107 @@ function CategoriesView() {
   );
 }
 
+/* ============================================================================
+   QUẢN LÝ SẢN PHẨM (IMPORT FILE ẢNH TỪ MÁY TÍNH + XEM TRƯỚC)
+============================================================================ */
 function ProductsView() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ category_id: '', name: '', slug: '', price: '', stock_quantity: 10, thumbnail_url: '', description: '', is_active: 1 });
+  const fileInputRef = useRef(null);
+
+  const [form, setForm] = useState({
+    category_id: '',
+    name: '',
+    slug: '',
+    price: '',
+    stock_quantity: 10,
+    thumbnail_url: '',
+    description: '',
+    is_active: 1
+  });
 
   const load = async () => {
     const [pRes, cRes] = await Promise.all([API.get('/api/products'), API.get('/api/categories')]);
     if (pRes.data.success) setProducts(pRes.data.data);
     if (cRes.data.success) {
       setCategories(cRes.data.data);
-      if (cRes.data.data.length > 0 && !form.category_id) setForm((prev) => ({ ...prev, category_id: cRes.data.data[0].id }));
+      if (cRes.data.data.length > 0 && !form.category_id) {
+        setForm((prev) => ({ ...prev, category_id: cRes.data.data[0].id }));
+      }
     }
   };
   useEffect(() => { load(); }, []);
 
+  // Đọc file ảnh từ máy tính, tự động nén tối ưu kích thước để lưu vào MySQL
+  const handleFileImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const scale = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+        setForm((prev) => ({ ...prev, thumbnail_url: compressedBase64 }));
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setForm({
+      category_id: categories[0]?.id || '',
+      name: '',
+      slug: '',
+      price: '',
+      stock_quantity: 10,
+      thumbnail_url: '',
+      description: '',
+      is_active: 1
+    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const payload = { ...form, category_id: Number(form.category_id), price: Number(form.price), stock_quantity: Number(form.stock_quantity), is_active: Number(form.is_active) };
+      const payload = {
+        ...form,
+        category_id: Number(form.category_id),
+        price: Number(form.price),
+        stock_quantity: Number(form.stock_quantity),
+        is_active: Number(form.is_active)
+      };
       if (editingId) await API.put(`/api/products/${editingId}`, payload);
       else await API.post('/api/products', payload);
-      setEditingId(null);
-      setForm({ category_id: categories[0]?.id || '', name: '', slug: '', price: '', stock_quantity: 10, thumbnail_url: '', description: '', is_active: 1 });
+      resetForm();
       load();
-    } catch (err) { alert(err.response?.data?.message || err.message); }
+    } catch (err) {
+      alert(err.response?.data?.message || err.message);
+    }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Xóa sản phẩm này?')) return;
-    try { const res = await API.delete(`/api/products/${id}`); alert(res.data.message); load(); }
-    catch (err) { alert(err.response?.data?.message || err.message); }
+    try {
+      const res = await API.delete(`/api/products/${id}`);
+      alert(res.data.message);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || err.message);
+    }
   };
 
   return (
@@ -239,12 +307,43 @@ function ProductsView() {
             <option value={0}>Đang ẩn (Ngừng bán)</option>
           </select>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-          <input style={inputStyle} placeholder="Link ảnh đại diện (URL)" value={form.thumbnail_url} onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })} />
-          <input style={inputStyle} placeholder="Mô tả ngắn sản phẩm" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem', alignItems: 'center' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.35rem', color: '#475569' }}>
+              Chọn file hình ảnh từ máy tính:
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileImport}
+              style={{ ...inputStyle, padding: '0.35rem' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.35rem', color: '#475569' }}>
+              Mô tả ngắn sản phẩm:
+            </label>
+            <input style={inputStyle} placeholder="Nhập mô tả chi tiết..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          </div>
         </div>
+
+        {form.thumbnail_url && (
+          <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <img src={form.thumbnail_url} alt="Preview" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+            <button
+              type="button"
+              onClick={() => { setForm((prev) => ({ ...prev, thumbnail_url: '' })); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+              style={{ padding: '0.3rem 0.65rem', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              Xóa ảnh này
+            </button>
+          </div>
+        )}
+
         <button type="submit" style={btnPrimary}>{editingId ? 'Lưu sản phẩm' : 'Thêm sản phẩm'}</button>
-        {editingId && <button type="button" style={btnSecondary} onClick={() => setEditingId(null)}>Hủy</button>}
+        {editingId && <button type="button" style={btnSecondary} onClick={resetForm}>Hủy</button>}
       </form>
 
       <div style={cardStyle}>
@@ -395,4 +494,4 @@ const tdStyle = { padding: '0.75rem', fontSize: '0.9rem' };
 const btnPrimary = { padding: '0.45rem 0.9rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '0.4rem' };
 const btnSecondary = { padding: '0.45rem 0.9rem', background: '#64748b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' };
 const btnWarn = { padding: '0.35rem 0.75rem', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '0.4rem' };
-const btnDanger = { padding: '0.35rem 0.75rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' };
+// const btnDanger = { padding: '0.35rem 0.75rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' };
