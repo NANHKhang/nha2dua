@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 
-// Lấy danh sách đơn hàng (hỗ trợ lọc theo user_id nếu khách hàng xem đơn của mình)
+// 1. Lấy danh sách đơn hàng (Nếu có user_id thì chỉ lấy đơn của đúng khách hàng đó)
 router.get('/', async (req, res) => {
   const { user_id } = req.query;
   try {
@@ -12,21 +12,22 @@ router.get('/', async (req, res) => {
       LEFT JOIN users u ON o.user_id = u.id
     `;
     const params = [];
+
     if (user_id) {
       sql += ' WHERE o.user_id = ?';
-      params.push(user_id);
+      params.push(Number(user_id));
     }
-    sql += ' ORDER BY o.created_at DESC';
 
+    sql += ' ORDER BY o.created_at DESC';
     const [orders] = await db.query(sql, params);
 
-    // Nếu là khách hàng xem đơn của mình, lấy kèm chi tiết món ăn/sản phẩm trong từng đơn
+    // Kèm danh sách sản phẩm trong từng đơn khi khách hàng xem "Đơn hàng của tôi"
     if (user_id && orders.length > 0) {
       const orderIds = orders.map((o) => o.id);
       const [allItems] = await db.query('SELECT * FROM order_items WHERE order_id IN (?)', [orderIds]);
       const ordersWithItems = orders.map((o) => ({
         ...o,
-        items: allItems.filter((it) => it.order_id === o.id)
+        items: allItems.filter((it) => Number(it.order_id) === Number(o.id))
       }));
       return res.json({ success: true, data: ordersWithItems });
     }
@@ -37,7 +38,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Lấy chi tiết sản phẩm trong 1 đơn hàng (Admin)
+// 2. Lấy chi tiết sản phẩm trong 1 đơn hàng (Admin)
 router.get('/:id/items', async (req, res) => {
   try {
     const [items] = await db.query('SELECT * FROM order_items WHERE order_id = ?', [req.params.id]);
@@ -47,22 +48,24 @@ router.get('/:id/items', async (req, res) => {
   }
 });
 
-// Tạo đơn hàng mới
+// 3. Tạo đơn hàng mới (Thanh toán khi nhận hàng - COD)
 router.post('/', async (req, res) => {
-  const { user_id, receiver_name, receiver_phone, shipping_address, payment_method, note, items } = req.body;
+  const { user_id, receiver_name, receiver_phone, shipping_address, note, items } = req.body;
+  if (!user_id) {
+    return res.status(401).json({ success: false, message: 'Vui lòng đăng nhập trước khi đặt hàng!' });
+  }
   if (!receiver_name || !receiver_phone || !shipping_address || !items || items.length === 0) {
     return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ thông tin nhận hàng và giỏ hàng!' });
   }
 
   const orderCode = 'ORD' + Date.now().toString().slice(-9);
   const totalAmount = items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
-  const customerId = user_id || 2;
 
   try {
     const [orderResult] = await db.query(
       `INSERT INTO orders (order_code, user_id, status, payment_method, payment_status, total_amount, receiver_name, receiver_phone, shipping_address, note) 
-       VALUES (?, ?, 'pending', ?, 'unpaid', ?, ?, ?, ?, ?)`,
-      [orderCode, customerId, payment_method || 'cod', totalAmount, receiver_name, receiver_phone, shipping_address, note || null]
+       VALUES (?, ?, 'pending', 'cod', 'unpaid', ?, ?, ?, ?, ?)`,
+      [orderCode, Number(user_id), totalAmount, receiver_name, receiver_phone, shipping_address, note || null]
     );
 
     const orderId = orderResult.insertId;
@@ -83,7 +86,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Cập nhật trạng thái đơn hàng & thanh toán (Admin)
+// 4. Cập nhật trạng thái đơn hàng & thanh toán (Admin)
 router.put('/:id/status', async (req, res) => {
   const { status, payment_status } = req.body;
   try {

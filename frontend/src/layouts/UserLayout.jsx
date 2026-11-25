@@ -105,18 +105,16 @@ export default function UserLayout({ currentUser, onLoginSuccess, onUpdateUser, 
       >
         <div className="container" style={{ height: '70px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-            {/* Logo Nhà 2 Đứa */}
+            {/* Logo Nhà 2 Đứa (không khung viền) */}
             <div
               onClick={() => { setPage('home'); setShowMegaMenu(false); }}
               style={{
-                fontSize: '1.25rem',
+                fontSize: '1.35rem',
                 fontWeight: '800',
                 color: '#0f172a',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
-                border: '2px solid #0f172a',
-                padding: '0.25rem 0.7rem',
-                letterSpacing: '0.02em'
+                letterSpacing: '-0.01em'
               }}
             >
               Nhà 2 Đứa
@@ -188,7 +186,6 @@ export default function UserLayout({ currentUser, onLoginSuccess, onUpdateUser, 
         {showMegaMenu && (
           <div className="mega-menu-panel">
             <div className="container mega-menu-layout">
-              {/* Cột trái: Các danh mục cha & con xếp cột tự động */}
               <div className="mega-menu-columns">
                 {rootCategories.map((root) => {
                   const children = categories.filter((c) => Number(c.parent_id) === Number(root.id));
@@ -217,7 +214,6 @@ export default function UserLayout({ currentUser, onLoginSuccess, onUpdateUser, 
                 })}
               </div>
 
-              {/* Cột phải: Thẻ giới thiệu bộ sưu tập giống Nhà Xinh */}
               <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: '1.75rem' }}>
                 <div style={{ borderRadius: '8px', overflow: 'hidden', marginBottom: '0.85rem', background: '#f1f5f9', height: '140px' }}>
                   <img
@@ -661,6 +657,9 @@ function CartView({ cart, totalCartCount, totalCartPrice, onUpdateQty, onRemove,
   );
 }
 
+/* ============================================================================
+   5. TRANG THANH TOÁN (CHỈ THANH TOÁN KHI NHẬN HÀNG - COD)
+============================================================================ */
 function CheckoutView({ currentUser, cart, totalCartPrice, onOrderSuccess, onRequireLogin }) {
   const [form, setForm] = useState({
     receiver_name: currentUser?.full_name || '',
@@ -704,13 +703,12 @@ function CheckoutView({ currentUser, cart, totalCartPrice, onOrderSuccess, onReq
 
           <div className="card">
             <h3 style={{ fontSize: '1.05rem', fontWeight: '700', marginBottom: '1rem' }}>Phương thức thanh toán</h3>
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '1rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', cursor: 'pointer', marginBottom: '0.75rem' }}>
-              <input type="radio" name="pay" checked={form.payment_method === 'cod'} onChange={() => setForm({ ...form, payment_method: 'cod' })} style={{ marginTop: '0.25rem' }} />
-              <div><div style={{ fontWeight: '700', fontSize: '0.92rem' }}>Thanh toán khi nhận hàng (COD)</div><div style={{ fontSize: '0.82rem', color: '#475569' }}>Bạn trả tiền mặt khi nhận được hàng.</div></div>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer' }}>
-              <input type="radio" name="pay" checked={form.payment_method === 'bank_transfer'} onChange={() => setForm({ ...form, payment_method: 'bank_transfer' })} style={{ marginTop: '0.25rem' }} />
-              <div><div style={{ fontWeight: '700', fontSize: '0.92rem' }}>Chuyển khoản ngân hàng</div><div style={{ fontSize: '0.82rem', color: '#475569' }}>Chuyển khoản trực tiếp qua tài khoản ngân hàng của cửa hàng.</div></div>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '1rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', cursor: 'pointer' }}>
+              <input type="radio" name="pay" checked readOnly style={{ marginTop: '0.25rem' }} />
+              <div>
+                <div style={{ fontWeight: '700', fontSize: '0.92rem' }}>Thanh toán khi nhận hàng (COD)</div>
+                <div style={{ fontSize: '0.82rem', color: '#475569' }}>Bạn trả tiền mặt khi nhận được hàng.</div>
+              </div>
             </label>
           </div>
         </div>
@@ -783,6 +781,9 @@ function AuthView({ onLoginSuccess }) {
   );
 }
 
+/* ============================================================================
+   7. ĐƠN HÀNG CỦA TÔI (CHỈ HIỂN THỊ ĐÚNG ĐƠN CỦA USER ĐANG ĐĂNG NHẬP)
+============================================================================ */
 function MyOrdersView({ currentUser, onRequireLogin }) {
   const [orders, setOrders] = useState([]);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -790,7 +791,10 @@ function MyOrdersView({ currentUser, onRequireLogin }) {
   useEffect(() => {
     if (!currentUser) return;
     API.get(`/api/orders?user_id=${currentUser.id}`).then((res) => {
-      if (res.data?.success && Array.isArray(res.data.data)) setOrders(res.data.data);
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        const myOrders = res.data.data.filter((o) => Number(o.user_id) === Number(currentUser.id));
+        setOrders(myOrders);
+      }
     });
   }, [currentUser]);
 
