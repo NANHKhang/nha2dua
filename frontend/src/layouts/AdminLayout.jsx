@@ -2,7 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import API from '../api/axios';
 
 const toSlug = (str) =>
-  str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
+  String(str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
 
 export default function AdminLayout({ currentUser, onLogout }) {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -70,16 +77,29 @@ export default function AdminLayout({ currentUser, onLogout }) {
 
 function DashboardView() {
   const [stats, setStats] = useState(null);
+  const [errMsg, setErrMsg] = useState('');
+
   useEffect(() => {
-    API.get('/api/dashboard/stats').then((res) => res.data.success && setStats(res.data.data));
+    API.get('/api/dashboard/stats')
+      .then((res) => {
+        if (res.data?.success && res.data?.data) {
+          setStats(res.data.data);
+        } else {
+          setErrMsg('Không tải được dữ liệu thống kê.');
+        }
+      })
+      .catch((err) => setErrMsg(err.response?.data?.message || err.message));
   }, []);
+
+  if (errMsg) return <div style={errorBoxStyle}>Lỗi tải Dashboard: {errMsg}</div>;
   if (!stats) return <p>Đang tải số liệu tổng quan...</p>;
 
+  const recentOrders = Array.isArray(stats.recentOrders) ? stats.recentOrders : [];
   const cards = [
-    { title: 'Doanh thu hoàn thành', value: `${Number(stats.totalRevenue).toLocaleString('vi-VN')} đ`, color: '#16a34a' },
-    { title: 'Tổng đơn hàng', value: stats.totalOrders, color: '#2563eb' },
-    { title: 'Sản phẩm đang bán', value: stats.totalProducts, color: '#d97706' },
-    { title: 'Khách hàng', value: stats.totalUsers, color: '#7c3aed' }
+    { title: 'Doanh thu hoàn thành', value: `${Number(stats.totalRevenue || 0).toLocaleString('vi-VN')} đ`, color: '#16a34a' },
+    { title: 'Tổng đơn hàng', value: stats.totalOrders || 0, color: '#2563eb' },
+    { title: 'Sản phẩm đang bán', value: stats.totalProducts || 0, color: '#d97706' },
+    { title: 'Khách hàng', value: stats.totalUsers || 0, color: '#7c3aed' }
   ];
 
   return (
@@ -102,15 +122,19 @@ function DashboardView() {
             </tr>
           </thead>
           <tbody>
-            {stats.recentOrders.map((o) => (
-              <tr key={o.id} style={trStyle}>
-                <td style={tdStyle}><strong>{o.order_code}</strong></td>
-                <td style={tdStyle}>{o.receiver_name}</td>
-                <td style={tdStyle}>{Number(o.total_amount).toLocaleString('vi-VN')} đ</td>
-                <td style={tdStyle}>{o.payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</td>
-                <td style={tdStyle}><code>{o.status}</code></td>
-              </tr>
-            ))}
+            {recentOrders.length === 0 ? (
+              <tr><td colSpan="5" style={tdStyle}>Chưa có đơn hàng nào.</td></tr>
+            ) : (
+              recentOrders.map((o) => (
+                <tr key={o.id} style={trStyle}>
+                  <td style={tdStyle}><strong>{o.order_code}</strong></td>
+                  <td style={tdStyle}>{o.receiver_name}</td>
+                  <td style={tdStyle}>{Number(o.total_amount).toLocaleString('vi-VN')} đ</td>
+                  <td style={tdStyle}>{o.payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</td>
+                  <td style={tdStyle}><code>{o.status}</code></td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -120,12 +144,29 @@ function DashboardView() {
 
 function CategoriesView() {
   const [list, setList] = useState([]);
+  const [errMsg, setErrMsg] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [parentId, setParentId] = useState('');
 
-  const load = () => API.get('/api/categories').then((res) => res.data.success && setList(res.data.data));
+  const load = () => {
+    setErrMsg('');
+    API.get('/api/categories')
+      .then((res) => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          setList(res.data.data);
+        } else {
+          setList([]);
+          setErrMsg(res.data?.message || 'API /api/categories không trả về danh sách hợp lệ.');
+        }
+      })
+      .catch((err) => {
+        setList([]);
+        setErrMsg(err.response?.data?.message || err.message);
+      });
+  };
+
   useEffect(() => { load(); }, []);
 
   const handleSubmit = async (e) => {
@@ -148,6 +189,7 @@ function CategoriesView() {
   return (
     <div>
       <h2 style={{ marginBottom: '1.5rem' }}>Quản lý danh mục sản phẩm</h2>
+      {errMsg && <div style={errorBoxStyle}>Lỗi tải danh mục: {errMsg}</div>}
       <form onSubmit={handleSubmit} style={cardStyle}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
           <input style={inputStyle} placeholder="Tên danh mục *" value={name} required onChange={(e) => { setName(e.target.value); if (!editingId) setSlug(toSlug(e.target.value)); }} />
@@ -168,18 +210,22 @@ function CategoriesView() {
             </tr>
           </thead>
           <tbody>
-            {list.map((c) => (
-              <tr key={c.id} style={trStyle}>
-                <td style={tdStyle}>{c.id}</td>
-                <td style={tdStyle}><strong>{c.name}</strong></td>
-                <td style={tdStyle}><code>{c.slug}</code></td>
-                <td style={tdStyle}>{list.find((p) => p.id === c.parent_id)?.name || '—'}</td>
-                <td style={tdStyle}>
-                  <button style={btnWarn} onClick={() => { setEditingId(c.id); setName(c.name); setSlug(c.slug); setParentId(c.parent_id || ''); }}>Sửa</button>
-                  <button style={btnDanger} onClick={() => handleDelete(c.id)}>Xóa</button>
-                </td>
-              </tr>
-            ))}
+            {list.length === 0 ? (
+              <tr><td colSpan="5" style={tdStyle}>Chưa có danh mục nào.</td></tr>
+            ) : (
+              list.map((c) => (
+                <tr key={c.id} style={trStyle}>
+                  <td style={tdStyle}>{c.id}</td>
+                  <td style={tdStyle}><strong>{c.name}</strong></td>
+                  <td style={tdStyle}><code>{c.slug}</code></td>
+                  <td style={tdStyle}>{list.find((p) => p.id === c.parent_id)?.name || '—'}</td>
+                  <td style={tdStyle}>
+                    <button style={btnWarn} onClick={() => { setEditingId(c.id); setName(c.name); setSlug(c.slug); setParentId(c.parent_id || ''); }}>Sửa</button>
+                    <button style={btnDanger} onClick={() => handleDelete(c.id)}>Xóa</button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -187,12 +233,10 @@ function CategoriesView() {
   );
 }
 
-/* ============================================================================
-   QUẢN LÝ SẢN PHẨM (IMPORT FILE ẢNH TỪ MÁY TÍNH + XEM TRƯỚC)
-============================================================================ */
 function ProductsView() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [errMsg, setErrMsg] = useState('');
   const [editingId, setEditingId] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -208,18 +252,23 @@ function ProductsView() {
   });
 
   const load = async () => {
-    const [pRes, cRes] = await Promise.all([API.get('/api/products'), API.get('/api/categories')]);
-    if (pRes.data.success) setProducts(pRes.data.data);
-    if (cRes.data.success) {
-      setCategories(cRes.data.data);
-      if (cRes.data.data.length > 0 && !form.category_id) {
-        setForm((prev) => ({ ...prev, category_id: cRes.data.data[0].id }));
+    setErrMsg('');
+    try {
+      const [pRes, cRes] = await Promise.all([API.get('/api/products'), API.get('/api/categories')]);
+      const prodList = Array.isArray(pRes.data?.data) ? pRes.data.data : [];
+      const catList = Array.isArray(cRes.data?.data) ? cRes.data.data : [];
+      setProducts(prodList);
+      setCategories(catList);
+      if (catList.length > 0 && !form.category_id) {
+        setForm((prev) => ({ ...prev, category_id: catList[0].id }));
       }
+    } catch (err) {
+      setErrMsg(err.response?.data?.message || err.message);
     }
   };
+
   useEffect(() => { load(); }, []);
 
-  // Đọc file ảnh từ máy tính, tự động nén tối ưu kích thước để lưu vào MySQL
   const handleFileImport = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -283,7 +332,7 @@ function ProductsView() {
     if (!window.confirm('Xóa sản phẩm này?')) return;
     try {
       const res = await API.delete(`/api/products/${id}`);
-      alert(res.data.message);
+      alert(res.data?.message || 'Đã xóa');
       load();
     } catch (err) {
       alert(err.response?.data?.message || err.message);
@@ -293,11 +342,13 @@ function ProductsView() {
   return (
     <div>
       <h2 style={{ marginBottom: '1.5rem' }}>Quản lý sản phẩm</h2>
+      {errMsg && <div style={errorBoxStyle}>Lỗi tải sản phẩm: {errMsg}</div>}
       <form onSubmit={handleSubmit} style={cardStyle}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
           <input style={inputStyle} placeholder="Tên sản phẩm *" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value, slug: editingId ? form.slug : toSlug(e.target.value) })} />
           <input style={inputStyle} placeholder="Slug *" required value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} />
           <select style={inputStyle} value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
+            {categories.length === 0 && <option value="">-- Chưa có danh mục --</option>}
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <input style={inputStyle} type="number" placeholder="Giá bán (VND) *" required value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
@@ -313,13 +364,7 @@ function ProductsView() {
             <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.35rem', color: '#475569' }}>
               Chọn file hình ảnh từ máy tính:
             </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileImport}
-              style={{ ...inputStyle, padding: '0.35rem' }}
-            />
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileImport} style={{ ...inputStyle, padding: '0.35rem' }} />
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.35rem', color: '#475569' }}>
@@ -354,20 +399,24 @@ function ProductsView() {
             </tr>
           </thead>
           <tbody>
-            {products.map((p) => (
-              <tr key={p.id} style={trStyle}>
-                <td style={tdStyle}>{p.thumbnail_url ? <img src={p.thumbnail_url} alt="" style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '4px' }} /> : '—'}</td>
-                <td style={tdStyle}><strong>{p.name}</strong><div style={{ fontSize: '0.8rem', color: '#64748b' }}>{p.slug}</div></td>
-                <td style={tdStyle}>{p.category_name}</td>
-                <td style={tdStyle}>{Number(p.price).toLocaleString('vi-VN')} đ</td>
-                <td style={tdStyle}>{p.stock_quantity}</td>
-                <td style={tdStyle}>{p.is_active ? <span style={{ color: '#16a34a', fontWeight: '600' }}>Đang bán</span> : <span style={{ color: '#dc2626' }}>Đã ẩn</span>}</td>
-                <td style={tdStyle}>
-                  <button style={btnWarn} onClick={() => { setEditingId(p.id); setForm({ ...p, thumbnail_url: p.thumbnail_url || '', description: p.description || '' }); }}>Sửa</button>
-                  <button style={btnDanger} onClick={() => handleDelete(p.id)}>Xóa</button>
-                </td>
-              </tr>
-            ))}
+            {products.length === 0 ? (
+              <tr><td colSpan="7" style={tdStyle}>Chưa có sản phẩm nào.</td></tr>
+            ) : (
+              products.map((p) => (
+                <tr key={p.id} style={trStyle}>
+                  <td style={tdStyle}>{p.thumbnail_url ? <img src={p.thumbnail_url} alt="" style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '4px' }} /> : '—'}</td>
+                  <td style={tdStyle}><strong>{p.name}</strong><div style={{ fontSize: '0.8rem', color: '#64748b' }}>{p.slug}</div></td>
+                  <td style={tdStyle}>{p.category_name}</td>
+                  <td style={tdStyle}>{Number(p.price).toLocaleString('vi-VN')} đ</td>
+                  <td style={tdStyle}>{p.stock_quantity}</td>
+                  <td style={tdStyle}>{p.is_active ? <span style={{ color: '#16a34a', fontWeight: '600' }}>Đang bán</span> : <span style={{ color: '#dc2626' }}>Đã ẩn</span>}</td>
+                  <td style={tdStyle}>
+                    <button style={btnWarn} onClick={() => { setEditingId(p.id); setForm({ ...p, thumbnail_url: p.thumbnail_url || '', description: p.description || '' }); }}>Sửa</button>
+                    <button style={btnDanger} onClick={() => handleDelete(p.id)}>Xóa</button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -377,16 +426,29 @@ function ProductsView() {
 
 function OrdersView() {
   const [orders, setOrders] = useState([]);
+  const [errMsg, setErrMsg] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
 
-  const load = () => API.get('/api/orders').then((res) => res.data.success && setOrders(res.data.data));
+  const load = () => {
+    setErrMsg('');
+    API.get('/api/orders')
+      .then((res) => {
+        if (res.data?.success && Array.isArray(res.data.data)) setOrders(res.data.data);
+        else { setOrders([]); setErrMsg(res.data?.message || 'Không tải được danh sách đơn hàng.'); }
+      })
+      .catch((err) => { setOrders([]); setErrMsg(err.response?.data?.message || err.message); });
+  };
   useEffect(() => { load(); }, []);
 
   const viewDetails = async (order) => {
     setSelectedOrder(order);
-    const res = await API.get(`/api/orders/${order.id}/items`);
-    if (res.data.success) setOrderItems(res.data.data);
+    try {
+      const res = await API.get(`/api/orders/${order.id}/items`);
+      setOrderItems(Array.isArray(res.data?.data) ? res.data.data : []);
+    } catch (err) {
+      alert(err.response?.data?.message || err.message);
+    }
   };
 
   const updateStatus = async (order, newStatus, newPayStatus) => {
@@ -397,6 +459,7 @@ function OrdersView() {
   return (
     <div>
       <h2 style={{ marginBottom: '1.5rem' }}>Quản lý đơn hàng</h2>
+      {errMsg && <div style={errorBoxStyle}>Lỗi tải đơn hàng: {errMsg}</div>}
       <div style={cardStyle}>
         <table style={tableStyle}>
           <thead>
@@ -405,25 +468,29 @@ function OrdersView() {
             </tr>
           </thead>
           <tbody>
-            {orders.map((o) => (
-              <tr key={o.id} style={trStyle}>
-                <td style={tdStyle}><strong>{o.order_code}</strong></td>
-                <td style={tdStyle}>{o.receiver_name}<div style={{ fontSize: '0.8rem', color: '#64748b' }}>{o.receiver_phone}</div></td>
-                <td style={tdStyle}>{o.shipping_address}</td>
-                <td style={tdStyle}><strong>{Number(o.total_amount).toLocaleString('vi-VN')} đ</strong></td>
-                <td style={tdStyle}>
-                  <select style={inputStyle} value={o.payment_status} onChange={(e) => updateStatus(o, o.status, e.target.value)}>
-                    <option value="unpaid">Chưa thanh toán</option><option value="paid">Đã thanh toán</option>
-                  </select>
-                </td>
-                <td style={tdStyle}>
-                  <select style={inputStyle} value={o.status} onChange={(e) => updateStatus(o, e.target.value, o.payment_status)}>
-                    <option value="pending">Chờ xác nhận</option><option value="confirmed">Đã xác nhận</option><option value="shipping">Đang giao hàng</option><option value="completed">Hoàn thành</option><option value="cancelled">Đã hủy</option>
-                  </select>
-                </td>
-                <td style={tdStyle}><button style={btnPrimary} onClick={() => viewDetails(o)}>Xem món</button></td>
-              </tr>
-            ))}
+            {orders.length === 0 ? (
+              <tr><td colSpan="7" style={tdStyle}>Chưa có đơn hàng nào.</td></tr>
+            ) : (
+              orders.map((o) => (
+                <tr key={o.id} style={trStyle}>
+                  <td style={tdStyle}><strong>{o.order_code}</strong></td>
+                  <td style={tdStyle}>{o.receiver_name}<div style={{ fontSize: '0.8rem', color: '#64748b' }}>{o.receiver_phone}</div></td>
+                  <td style={tdStyle}>{o.shipping_address}</td>
+                  <td style={tdStyle}><strong>{Number(o.total_amount).toLocaleString('vi-VN')} đ</strong></td>
+                  <td style={tdStyle}>
+                    <select style={inputStyle} value={o.payment_status} onChange={(e) => updateStatus(o, o.status, e.target.value)}>
+                      <option value="unpaid">Chưa thanh toán</option><option value="paid">Đã thanh toán</option>
+                    </select>
+                  </td>
+                  <td style={tdStyle}>
+                    <select style={inputStyle} value={o.status} onChange={(e) => updateStatus(o, e.target.value, o.payment_status)}>
+                      <option value="pending">Chờ xác nhận</option><option value="confirmed">Đã xác nhận</option><option value="shipping">Đang giao hàng</option><option value="completed">Hoàn thành</option><option value="cancelled">Đã hủy</option>
+                    </select>
+                  </td>
+                  <td style={tdStyle}><button style={btnPrimary} onClick={() => viewDetails(o)}>Xem món</button></td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -453,7 +520,17 @@ function OrdersView() {
 
 function UsersView() {
   const [users, setUsers] = useState([]);
-  const load = () => API.get('/api/users').then((res) => res.data.success && setUsers(res.data.data));
+  const [errMsg, setErrMsg] = useState('');
+
+  const load = () => {
+    setErrMsg('');
+    API.get('/api/users')
+      .then((res) => {
+        if (res.data?.success && Array.isArray(res.data.data)) setUsers(res.data.data);
+        else { setUsers([]); setErrMsg(res.data?.message || 'Không tải được danh sách người dùng.'); }
+      })
+      .catch((err) => { setUsers([]); setErrMsg(err.response?.data?.message || err.message); });
+  };
   useEffect(() => { load(); }, []);
 
   const toggleActive = async (u) => {
@@ -464,19 +541,24 @@ function UsersView() {
   return (
     <div>
       <h2 style={{ marginBottom: '1.5rem' }}>Quản lý tài khoản người dùng</h2>
+      {errMsg && <div style={errorBoxStyle}>Lỗi tải người dùng: {errMsg}</div>}
       <div style={cardStyle}>
         <table style={tableStyle}>
           <thead>
             <tr style={theadStyle}><th style={thStyle}>ID</th><th style={thStyle}>Họ tên</th><th style={thStyle}>Email</th><th style={thStyle}>SĐT</th><th style={thStyle}>Vai trò</th><th style={thStyle}>Trạng thái</th><th style={thStyle}>Hành động</th></tr>
           </thead>
           <tbody>
-            {users.map((u) => (
-              <tr key={u.id} style={trStyle}>
-                <td style={tdStyle}>{u.id}</td><td style={tdStyle}><strong>{u.full_name}</strong></td><td style={tdStyle}>{u.email}</td><td style={tdStyle}>{u.phone || '—'}</td><td style={tdStyle}><code>{u.role_name}</code></td>
-                <td style={tdStyle}>{u.is_active ? <span style={{ color: '#16a34a', fontWeight: '600' }}>Hoạt động</span> : <span style={{ color: '#dc2626', fontWeight: '600' }}>Bị khóa</span>}</td>
-                <td style={tdStyle}><button style={u.is_active ? btnDanger : btnPrimary} onClick={() => toggleActive(u)}>{u.is_active ? 'Khóa' : 'Mở khóa'}</button></td>
-              </tr>
-            ))}
+            {users.length === 0 ? (
+              <tr><td colSpan="7" style={tdStyle}>Chưa có tài khoản nào.</td></tr>
+            ) : (
+              users.map((u) => (
+                <tr key={u.id} style={trStyle}>
+                  <td style={tdStyle}>{u.id}</td><td style={tdStyle}><strong>{u.full_name}</strong></td><td style={tdStyle}>{u.email}</td><td style={tdStyle}>{u.phone || '—'}</td><td style={tdStyle}><code>{u.role_name}</code></td>
+                  <td style={tdStyle}>{u.is_active ? <span style={{ color: '#16a34a', fontWeight: '600' }}>Hoạt động</span> : <span style={{ color: '#dc2626', fontWeight: '600' }}>Bị khóa</span>}</td>
+                  <td style={tdStyle}><button style={u.is_active ? btnDanger : btnPrimary} onClick={() => toggleActive(u)}>{u.is_active ? 'Khóa' : 'Mở khóa'}</button></td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -484,6 +566,7 @@ function UsersView() {
   );
 }
 
+const errorBoxStyle = { background: '#fee2e2', color: '#b91c1c', padding: '1rem', borderRadius: '6px', marginBottom: '1rem', border: '1px solid #fca5a5' };
 const cardStyle = { background: '#fff', padding: '1.5rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: '1.5rem' };
 const inputStyle = { width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' };
 const tableStyle = { width: '100%', borderCollapse: 'collapse', textAlign: 'left' };
@@ -494,4 +577,4 @@ const tdStyle = { padding: '0.75rem', fontSize: '0.9rem' };
 const btnPrimary = { padding: '0.45rem 0.9rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '0.4rem' };
 const btnSecondary = { padding: '0.45rem 0.9rem', background: '#64748b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' };
 const btnWarn = { padding: '0.35rem 0.75rem', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '0.4rem' };
-// const btnDanger = { padding: '0.35rem 0.75rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' };
+const btnDanger = { padding: '0.35rem 0.75rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' };
