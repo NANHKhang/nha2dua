@@ -15,25 +15,26 @@ export default function AdminLayout({ currentUser, onLogout }) {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const menus = [
-    { id: 'dashboard', label: '1. Tổng quan (Dashboard)' },
-    { id: 'categories', label: '2. Quản lý danh mục' },
-    { id: 'products', label: '3. Quản lý sản phẩm' },
-    { id: 'orders', label: '4. Quản lý đơn hàng' },
-    { id: 'users', label: '5. Quản lý người dùng' }
+    { id: 'dashboard', label: 'Tổng quan' },
+    { id: 'categories', label: 'Danh mục' },
+    { id: 'products', label: 'Sản phẩm' },
+    { id: 'orders', label: 'Đơn hàng' },
+    { id: 'users', label: 'Người dùng' }
   ];
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f1f5f9', color: '#1e293b' }}>
-      <aside style={{ width: '260px', backgroundColor: '#0f172a', color: '#fff', padding: '1.5rem 1rem', flexShrink: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
+      {/* SIDEBAR */}
+      <aside style={{ width: '250px', backgroundColor: '#0f172a', color: '#fff', padding: '1.5rem 1rem', flexShrink: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: '1.3rem', fontWeight: 'bold', padding: '0 0.75rem 1rem', borderBottom: '1px solid #334155', marginBottom: '1rem' }}>
-            Furniture Admin
-            <div style={{ fontSize: '0.8rem', fontWeight: 'normal', color: '#94a3b8', marginTop: '0.35rem' }}>
+          <div style={{ padding: '0 0.75rem 1.25rem', borderBottom: '1px solid #1e293b', marginBottom: '1.25rem' }}>
+            <div style={{ fontSize: '1.2rem', fontWeight: '800' }}>Nhà 2 Đứa Dashboard</div>
+            <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.3rem' }}>
               Xin chào, {currentUser?.full_name || 'Admin'}
             </div>
           </div>
 
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
             {menus.map((m) => (
               <button
                 key={m.id}
@@ -41,12 +42,12 @@ export default function AdminLayout({ currentUser, onLogout }) {
                 style={{
                   textAlign: 'left',
                   padding: '0.75rem 1rem',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: '0.95rem',
+                  fontSize: '0.92rem',
                   fontWeight: activeTab === m.id ? '600' : '400',
-                  backgroundColor: activeTab === m.id ? '#2563eb' : 'transparent',
+                  backgroundColor: activeTab === m.id ? '#1d4ed8' : 'transparent',
                   color: activeTab === m.id ? '#fff' : '#cbd5e1'
                 }}
               >
@@ -58,12 +59,13 @@ export default function AdminLayout({ currentUser, onLogout }) {
 
         <button
           onClick={onLogout}
-          style={{ marginTop: '2rem', padding: '0.7rem', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+          style={{ padding: '0.7rem', backgroundColor: '#1e293b', color: '#f87171', border: '1px solid #334155', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
         >
           Đăng xuất
         </button>
       </aside>
 
+      {/* MAIN CONTENT */}
       <main style={{ flex: 1, padding: '2rem', overflowX: 'auto' }}>
         {activeTab === 'dashboard' && <DashboardView />}
         {activeTab === 'categories' && <CategoriesView />}
@@ -75,66 +77,77 @@ export default function AdminLayout({ currentUser, onLogout }) {
   );
 }
 
+/* ============================================================================
+   1. TỔNG QUAN HỆ THỐNG (TRANG 1 FIGMA)
+============================================================================ */
 function DashboardView() {
   const [stats, setStats] = useState(null);
-  const [errMsg, setErrMsg] = useState('');
 
   useEffect(() => {
-    API.get('/api/dashboard/stats')
-      .then((res) => {
-        if (res.data?.success && res.data?.data) {
-          setStats(res.data.data);
-        } else {
-          setErrMsg('Không tải được dữ liệu thống kê.');
-        }
-      })
-      .catch((err) => setErrMsg(err.response?.data?.message || err.message));
+    API.get('/api/dashboard/stats').then((res) => {
+      if (res.data?.success && res.data?.data) setStats(res.data.data);
+    });
   }, []);
 
-  if (errMsg) return <div style={errorBoxStyle}>Lỗi tải Dashboard: {errMsg}</div>;
-  if (!stats) return <p>Đang tải số liệu tổng quan...</p>;
+  if (!stats) return <p>Đang tải dữ liệu tổng quan...</p>;
 
-  const recentOrders = Array.isArray(stats.recentOrders) ? stats.recentOrders : [];
+  const statusMap = {
+    pending: { text: 'Chờ xác nhận', cls: 'badge-warning' },
+    confirmed: { text: 'Đã xác nhận', cls: 'badge-info' },
+    shipping: { text: 'Đang giao', cls: 'badge-info' },
+    completed: { text: 'Hoàn thành', cls: 'badge-success' },
+    cancelled: { text: 'Đã hủy', cls: 'badge-danger' }
+  };
+
   const cards = [
-    { title: 'Doanh thu hoàn thành', value: `${Number(stats.totalRevenue || 0).toLocaleString('vi-VN')} đ`, color: '#16a34a' },
-    { title: 'Tổng đơn hàng', value: stats.totalOrders || 0, color: '#2563eb' },
+    { title: 'Doanh thu hoàn thành', value: `${Number(stats.totalRevenue || 0).toLocaleString('vi-VN')} ₫`, color: '#16a34a' },
+    { title: 'Tổng đơn hàng', value: stats.totalOrders || 0, color: '#1d4ed8' },
     { title: 'Sản phẩm đang bán', value: stats.totalProducts || 0, color: '#d97706' },
     { title: 'Khách hàng', value: stats.totalUsers || 0, color: '#7c3aed' }
   ];
 
   return (
     <div>
-      <h2 style={{ marginBottom: '1.5rem' }}>Tổng quan hệ thống</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+      <h1 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '1.5rem' }}>Tổng quan hệ thống</h1>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
         {cards.map((c, i) => (
-          <div key={i} style={{ background: '#fff', padding: '1.5rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', borderLeft: `4px solid ${c.color}` }}>
-            <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.5rem' }}>{c.title}</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: c.color }}>{c.value}</div>
+          <div key={i} className="card" style={{ marginBottom: 0, borderLeft: `4px solid ${c.color}` }}>
+            <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.4rem' }}>{c.title}</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: '800', color: c.color }}>{c.value}</div>
           </div>
         ))}
       </div>
-      <div style={cardStyle}>
-        <h3 style={{ marginBottom: '1rem' }}>Đơn hàng gần đây</h3>
-        <table style={tableStyle}>
+
+      <div className="card">
+        <h3 style={{ fontSize: '1.05rem', fontWeight: '700', marginBottom: '1rem' }}>Đơn hàng gần đây</h3>
+        <table className="data-table">
           <thead>
-            <tr style={theadStyle}>
-              <th style={thStyle}>Mã đơn</th><th style={thStyle}>Người nhận</th><th style={thStyle}>Tổng tiền</th><th style={thStyle}>Thanh toán</th><th style={thStyle}>Trạng thái</th>
+            <tr>
+              <th>Mã đơn</th>
+              <th>Người nhận</th>
+              <th>Tổng tiền</th>
+              <th>Thanh toán</th>
+              <th>Trạng thái</th>
             </tr>
           </thead>
           <tbody>
-            {recentOrders.length === 0 ? (
-              <tr><td colSpan="5" style={tdStyle}>Chưa có đơn hàng nào.</td></tr>
-            ) : (
-              recentOrders.map((o) => (
-                <tr key={o.id} style={trStyle}>
-                  <td style={tdStyle}><strong>{o.order_code}</strong></td>
-                  <td style={tdStyle}>{o.receiver_name}</td>
-                  <td style={tdStyle}>{Number(o.total_amount).toLocaleString('vi-VN')} đ</td>
-                  <td style={tdStyle}>{o.payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}</td>
-                  <td style={tdStyle}><code>{o.status}</code></td>
+            {(stats.recentOrders || []).map((o) => {
+              const st = statusMap[o.status] || { text: o.status, cls: 'badge-gray' };
+              return (
+                <tr key={o.id}>
+                  <td><strong>{o.order_code}</strong></td>
+                  <td>{o.receiver_name}</td>
+                  <td><strong>{Number(o.total_amount).toLocaleString('vi-VN')} ₫</strong></td>
+                  <td>
+                    <span className={`badge ${o.payment_status === 'paid' ? 'badge-info' : 'badge-gray'}`}>
+                      {o.payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                    </span>
+                  </td>
+                  <td><span className={`badge ${st.cls}`}>{st.text}</span></td>
                 </tr>
-              ))
-            )}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -142,32 +155,29 @@ function DashboardView() {
   );
 }
 
+/* ============================================================================
+   2. QUẢN LÝ DANH MỤC SẢN PHẨM (TRANG 2 FIGMA)
+============================================================================ */
 function CategoriesView() {
   const [list, setList] = useState([]);
-  const [errMsg, setErrMsg] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [parentId, setParentId] = useState('');
 
   const load = () => {
-    setErrMsg('');
-    API.get('/api/categories')
-      .then((res) => {
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          setList(res.data.data);
-        } else {
-          setList([]);
-          setErrMsg(res.data?.message || 'API /api/categories không trả về danh sách hợp lệ.');
-        }
-      })
-      .catch((err) => {
-        setList([]);
-        setErrMsg(err.response?.data?.message || err.message);
-      });
+    API.get('/api/categories').then((res) => {
+      if (res.data?.success && Array.isArray(res.data.data)) setList(res.data.data);
+    });
   };
-
   useEffect(() => { load(); }, []);
+
+  const resetForm = () => {
+    setEditingId(null);
+    setName('');
+    setSlug('');
+    setParentId('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -175,57 +185,73 @@ function CategoriesView() {
       const payload = { name, slug, parent_id: parentId ? Number(parentId) : null };
       if (editingId) await API.put(`/api/categories/${editingId}`, payload);
       else await API.post('/api/categories', payload);
-      setEditingId(null); setName(''); setSlug(''); setParentId('');
+      resetForm();
       load();
-    } catch (err) { alert(err.response?.data?.message || err.message); }
+    } catch (err) {
+      alert(err.response?.data?.message || err.message);
+    }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Xác nhận xóa danh mục này?')) return;
-    try { await API.delete(`/api/categories/${id}`); load(); }
-    catch (err) { alert(err.response?.data?.message || err.message); }
+    try {
+      await API.delete(`/api/categories/${id}`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || err.message);
+    }
   };
 
   return (
     <div>
-      <h2 style={{ marginBottom: '1.5rem' }}>Quản lý danh mục sản phẩm</h2>
-      {errMsg && <div style={errorBoxStyle}>Lỗi tải danh mục: {errMsg}</div>}
-      <form onSubmit={handleSubmit} style={cardStyle}>
+      <h1 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '1.5rem' }}>Quản lý danh mục sản phẩm</h1>
+
+      <form onSubmit={handleSubmit} className="card">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-          <input style={inputStyle} placeholder="Tên danh mục *" value={name} required onChange={(e) => { setName(e.target.value); if (!editingId) setSlug(toSlug(e.target.value)); }} />
-          <input style={inputStyle} placeholder="Slug *" value={slug} required onChange={(e) => setSlug(e.target.value)} />
-          <select style={inputStyle} value={parentId} onChange={(e) => setParentId(e.target.value)}>
+          <input className="form-control" placeholder="Tên danh mục *" required value={name}
+            onChange={(e) => { setName(e.target.value); if (!editingId) setSlug(toSlug(e.target.value)); }} />
+          <input className="form-control" placeholder="Slug * (tự tạo từ tên)" required value={slug}
+            onChange={(e) => setSlug(e.target.value)} />
+          <select className="form-control" value={parentId} onChange={(e) => setParentId(e.target.value)}>
             <option value="">-- Danh mục gốc --</option>
-            {list.filter((c) => c.id !== editingId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {list.filter((c) => c.id !== editingId).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
           </select>
         </div>
-        <button type="submit" style={btnPrimary}>{editingId ? 'Lưu cập nhật' : 'Thêm danh mục'}</button>
-        {editingId && <button type="button" style={btnSecondary} onClick={() => { setEditingId(null); setName(''); setSlug(''); setParentId(''); }}>Hủy</button>}
+
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button type="submit" className="btn btn-primary">{editingId ? 'Lưu cập nhật' : 'Thêm danh mục'}</button>
+          <button type="button" onClick={resetForm} className="btn btn-outline">Hủy</button>
+        </div>
       </form>
-      <div style={cardStyle}>
-        <table style={tableStyle}>
+
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <table className="data-table">
           <thead>
-            <tr style={theadStyle}>
-              <th style={thStyle}>ID</th><th style={thStyle}>Tên danh mục</th><th style={thStyle}>Slug</th><th style={thStyle}>Danh mục cha</th><th style={thStyle}>Thao tác</th>
+            <tr>
+              <th>ID</th>
+              <th>Tên danh mục</th>
+              <th>Slug</th>
+              <th>Danh mục cha</th>
+              <th>Thao tác</th>
             </tr>
           </thead>
           <tbody>
-            {list.length === 0 ? (
-              <tr><td colSpan="5" style={tdStyle}>Chưa có danh mục nào.</td></tr>
-            ) : (
-              list.map((c) => (
-                <tr key={c.id} style={trStyle}>
-                  <td style={tdStyle}>{c.id}</td>
-                  <td style={tdStyle}><strong>{c.name}</strong></td>
-                  <td style={tdStyle}><code>{c.slug}</code></td>
-                  <td style={tdStyle}>{list.find((p) => p.id === c.parent_id)?.name || '—'}</td>
-                  <td style={tdStyle}>
-                    <button style={btnWarn} onClick={() => { setEditingId(c.id); setName(c.name); setSlug(c.slug); setParentId(c.parent_id || ''); }}>Sửa</button>
-                    <button style={btnDanger} onClick={() => handleDelete(c.id)}>Xóa</button>
-                  </td>
-                </tr>
-              ))
-            )}
+            {list.map((c) => (
+              <tr key={c.id}>
+                <td>{c.id}</td>
+                <td><strong>{c.name}</strong></td>
+                <td><code>{c.slug}</code></td>
+                <td>{list.find((p) => p.id === c.parent_id)?.name || '—'}</td>
+                <td>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <button className="btn btn-warn" onClick={() => { setEditingId(c.id); setName(c.name); setSlug(c.slug); setParentId(c.parent_id || ''); }}>Sửa</button>
+                    <button className="btn btn-danger" onClick={() => handleDelete(c.id)}>Xóa</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -233,10 +259,12 @@ function CategoriesView() {
   );
 }
 
+/* ============================================================================
+   3. QUẢN LÝ SẢN PHẨM (TRANG 3 FIGMA - IMPORT FILE ẢNH TỪ MÁY)
+============================================================================ */
 function ProductsView() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [errMsg, setErrMsg] = useState('');
   const [editingId, setEditingId] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -252,44 +280,34 @@ function ProductsView() {
   });
 
   const load = async () => {
-    setErrMsg('');
-    try {
-      const [pRes, cRes] = await Promise.all([API.get('/api/products'), API.get('/api/categories')]);
-      const prodList = Array.isArray(pRes.data?.data) ? pRes.data.data : [];
-      const catList = Array.isArray(cRes.data?.data) ? cRes.data.data : [];
-      setProducts(prodList);
-      setCategories(catList);
-      if (catList.length > 0 && !form.category_id) {
-        setForm((prev) => ({ ...prev, category_id: catList[0].id }));
-      }
-    } catch (err) {
-      setErrMsg(err.response?.data?.message || err.message);
+    const [pRes, cRes] = await Promise.all([API.get('/api/products'), API.get('/api/categories')]);
+    const pList = Array.isArray(pRes.data?.data) ? pRes.data.data : [];
+    const cList = Array.isArray(cRes.data?.data) ? cRes.data.data : [];
+    setProducts(pList);
+    setCategories(cList);
+    if (cList.length > 0 && !form.category_id) {
+      setForm((prev) => ({ ...prev, category_id: cList[0].id }));
     }
   };
-
   useEffect(() => { load(); }, []);
 
   const handleFileImport = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = (ev) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
-        const scale = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
+        const MAX_W = 800;
+        const scale = img.width > MAX_W ? MAX_W / img.width : 1;
         canvas.width = img.width * scale;
         canvas.height = img.height * scale;
-
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
-        setForm((prev) => ({ ...prev, thumbnail_url: compressedBase64 }));
+        setForm((prev) => ({ ...prev, thumbnail_url: canvas.toDataURL('image/jpeg', 0.8) }));
       };
-      img.src = event.target.result;
+      img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
   };
@@ -341,82 +359,96 @@ function ProductsView() {
 
   return (
     <div>
-      <h2 style={{ marginBottom: '1.5rem' }}>Quản lý sản phẩm</h2>
-      {errMsg && <div style={errorBoxStyle}>Lỗi tải sản phẩm: {errMsg}</div>}
-      <form onSubmit={handleSubmit} style={cardStyle}>
+      <h1 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '1.5rem' }}>Quản lý sản phẩm</h1>
+
+      <form onSubmit={handleSubmit} className="card">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-          <input style={inputStyle} placeholder="Tên sản phẩm *" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value, slug: editingId ? form.slug : toSlug(e.target.value) })} />
-          <input style={inputStyle} placeholder="Slug *" required value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} />
-          <select style={inputStyle} value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
-            {categories.length === 0 && <option value="">-- Chưa có danh mục --</option>}
+          <input className="form-control" placeholder="Tên sản phẩm *" required value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value, slug: editingId ? form.slug : toSlug(e.target.value) })} />
+          <input className="form-control" placeholder="Slug * (tự tạo từ tên)" required value={form.slug}
+            onChange={(e) => setForm({ ...form, slug: e.target.value })} />
+          <select className="form-control" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <input style={inputStyle} type="number" placeholder="Giá bán (VND) *" required value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-          <input style={inputStyle} type="number" placeholder="Số lượng tồn kho" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })} />
-          <select style={inputStyle} value={form.is_active} onChange={(e) => setForm({ ...form, is_active: Number(e.target.value) })}>
-            <option value={1}>Hiển thị trên web</option>
-            <option value={0}>Đang ẩn (Ngừng bán)</option>
+          <input className="form-control" type="number" placeholder="Giá bán (VND) *" required value={form.price}
+            onChange={(e) => setForm({ ...form, price: e.target.value })} />
+          <input className="form-control" type="number" placeholder="Số lượng tồn kho" value={form.stock_quantity}
+            onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })} />
+          <select className="form-control" value={form.is_active} onChange={(e) => setForm({ ...form, is_active: Number(e.target.value) })}>
+            <option value={1}>Đang bán</option>
+            <option value={0}>Đã ẩn</option>
           </select>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem', alignItems: 'center' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.35rem', color: '#475569' }}>
-              Chọn file hình ảnh từ máy tính:
-            </label>
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileImport} style={{ ...inputStyle, padding: '0.35rem' }} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.35rem', color: '#475569' }}>
-              Mô tả ngắn sản phẩm:
-            </label>
-            <input style={inputStyle} placeholder="Nhập mô tả chi tiết..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1rem', marginBottom: '1rem', alignItems: 'center' }}>
+          <input className="form-control" placeholder="Mô tả chi tiết..." value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })} />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileImport} style={{ display: 'none' }} />
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="btn btn-outline btn-sm">
+              Chọn ảnh từ máy
+            </button>
+            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Ảnh được tự nén trước khi lưu</span>
           </div>
         </div>
 
         {form.thumbnail_url && (
-          <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <img src={form.thumbnail_url} alt="Preview" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-            <button
-              type="button"
-              onClick={() => { setForm((prev) => ({ ...prev, thumbnail_url: '' })); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-              style={{ padding: '0.3rem 0.65rem', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}
-            >
-              Xóa ảnh này
-            </button>
+          <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <img src={form.thumbnail_url} alt="Preview" style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+            <button type="button" onClick={() => setForm({ ...form, thumbnail_url: '' })} className="btn btn-outline btn-sm">Xóa ảnh</button>
           </div>
         )}
 
-        <button type="submit" style={btnPrimary}>{editingId ? 'Lưu sản phẩm' : 'Thêm sản phẩm'}</button>
-        {editingId && <button type="button" style={btnSecondary} onClick={resetForm}>Hủy</button>}
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button type="submit" className="btn btn-primary">{editingId ? 'Lưu cập nhật' : 'Thêm sản phẩm'}</button>
+          <button type="button" onClick={resetForm} className="btn btn-outline">Hủy</button>
+        </div>
       </form>
 
-      <div style={cardStyle}>
-        <table style={tableStyle}>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <table className="data-table">
           <thead>
-            <tr style={theadStyle}>
-              <th style={thStyle}>Ảnh</th><th style={thStyle}>Tên sản phẩm</th><th style={thStyle}>Danh mục</th><th style={thStyle}>Giá bán</th><th style={thStyle}>Kho</th><th style={thStyle}>Trạng thái</th><th style={thStyle}>Thao tác</th>
+            <tr>
+              <th>STT</th>
+              <th>Ảnh</th>
+              <th>Tên sản phẩm</th>
+              <th>Danh mục</th>
+              <th>Giá bán</th>
+              <th>Kho</th>
+              <th>Trạng thái</th>
+              <th>Thao tác</th>
             </tr>
           </thead>
           <tbody>
-            {products.length === 0 ? (
-              <tr><td colSpan="7" style={tdStyle}>Chưa có sản phẩm nào.</td></tr>
-            ) : (
-              products.map((p) => (
-                <tr key={p.id} style={trStyle}>
-                  <td style={tdStyle}>{p.thumbnail_url ? <img src={p.thumbnail_url} alt="" style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '4px' }} /> : '—'}</td>
-                  <td style={tdStyle}><strong>{p.name}</strong><div style={{ fontSize: '0.8rem', color: '#64748b' }}>{p.slug}</div></td>
-                  <td style={tdStyle}>{p.category_name}</td>
-                  <td style={tdStyle}>{Number(p.price).toLocaleString('vi-VN')} đ</td>
-                  <td style={tdStyle}>{p.stock_quantity}</td>
-                  <td style={tdStyle}>{p.is_active ? <span style={{ color: '#16a34a', fontWeight: '600' }}>Đang bán</span> : <span style={{ color: '#dc2626' }}>Đã ẩn</span>}</td>
-                  <td style={tdStyle}>
-                    <button style={btnWarn} onClick={() => { setEditingId(p.id); setForm({ ...p, thumbnail_url: p.thumbnail_url || '', description: p.description || '' }); }}>Sửa</button>
-                    <button style={btnDanger} onClick={() => handleDelete(p.id)}>Xóa</button>
-                  </td>
-                </tr>
-              ))
-            )}
+            {products.map((p, idx) => (
+              <tr key={p.id}>
+                <td>{idx + 1}</td>
+                <td>
+                  <div style={{ width: '48px', height: '48px', background: '#f1f5f9', borderRadius: '6px', overflow: 'hidden' }}>
+                    {p.thumbnail_url && <img src={p.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                  </div>
+                </td>
+                <td>
+                  <strong>{p.name}</strong>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{p.slug}</div>
+                </td>
+                <td>{p.category_name}</td>
+                <td><strong>{Number(p.price).toLocaleString('vi-VN')} ₫</strong></td>
+                <td>{p.stock_quantity}</td>
+                <td>
+                  <span className={`badge ${p.is_active ? 'badge-success' : 'badge-danger'}`}>
+                    {p.is_active ? 'Đang bán' : 'Đã ẩn'}
+                  </span>
+                </td>
+                <td>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <button className="btn btn-warn" onClick={() => { setEditingId(p.id); setForm({ ...p, thumbnail_url: p.thumbnail_url || '', description: p.description || '' }); }}>Sửa</button>
+                    <button className="btn btn-danger" onClick={() => handleDelete(p.id)}>Xóa</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -424,90 +456,116 @@ function ProductsView() {
   );
 }
 
+/* ============================================================================
+   4. QUẢN LÝ ĐƠN HÀNG (TRANG 4 FIGMA)
+============================================================================ */
 function OrdersView() {
   const [orders, setOrders] = useState([]);
-  const [errMsg, setErrMsg] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
 
   const load = () => {
-    setErrMsg('');
-    API.get('/api/orders')
-      .then((res) => {
-        if (res.data?.success && Array.isArray(res.data.data)) setOrders(res.data.data);
-        else { setOrders([]); setErrMsg(res.data?.message || 'Không tải được danh sách đơn hàng.'); }
-      })
-      .catch((err) => { setOrders([]); setErrMsg(err.response?.data?.message || err.message); });
+    API.get('/api/orders').then((res) => {
+      if (res.data?.success && Array.isArray(res.data.data)) setOrders(res.data.data);
+    });
   };
   useEffect(() => { load(); }, []);
 
   const viewDetails = async (order) => {
     setSelectedOrder(order);
-    try {
-      const res = await API.get(`/api/orders/${order.id}/items`);
-      setOrderItems(Array.isArray(res.data?.data) ? res.data.data : []);
-    } catch (err) {
-      alert(err.response?.data?.message || err.message);
-    }
+    const res = await API.get(`/api/orders/${order.id}/items`);
+    if (res.data?.success && Array.isArray(res.data.data)) setOrderItems(res.data.data);
   };
 
-  const updateStatus = async (order, newStatus, newPayStatus) => {
-    await API.put(`/api/orders/${order.id}/status`, { status: newStatus, payment_status: newPayStatus });
+  const updateStatus = async (order, status, payment_status) => {
+    await API.put(`/api/orders/${order.id}/status`, { status, payment_status });
     load();
   };
 
   return (
     <div>
-      <h2 style={{ marginBottom: '1.5rem' }}>Quản lý đơn hàng</h2>
-      {errMsg && <div style={errorBoxStyle}>Lỗi tải đơn hàng: {errMsg}</div>}
-      <div style={cardStyle}>
-        <table style={tableStyle}>
+      <h1 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '1.5rem' }}>Quản lý đơn hàng</h1>
+
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <table className="data-table">
           <thead>
-            <tr style={theadStyle}>
-              <th style={thStyle}>Mã đơn</th><th style={thStyle}>Khách nhận</th><th style={thStyle}>Địa chỉ</th><th style={thStyle}>Tổng tiền</th><th style={thStyle}>Thanh toán</th><th style={thStyle}>Trạng thái đơn</th><th style={thStyle}>Chi tiết</th>
+            <tr>
+              <th>Mã đơn</th>
+              <th>Khách nhận</th>
+              <th>Địa chỉ</th>
+              <th>Tổng tiền</th>
+              <th>Thanh toán</th>
+              <th>Trạng thái đơn</th>
+              <th>Chi tiết</th>
             </tr>
           </thead>
           <tbody>
-            {orders.length === 0 ? (
-              <tr><td colSpan="7" style={tdStyle}>Chưa có đơn hàng nào.</td></tr>
-            ) : (
-              orders.map((o) => (
-                <tr key={o.id} style={trStyle}>
-                  <td style={tdStyle}><strong>{o.order_code}</strong></td>
-                  <td style={tdStyle}>{o.receiver_name}<div style={{ fontSize: '0.8rem', color: '#64748b' }}>{o.receiver_phone}</div></td>
-                  <td style={tdStyle}>{o.shipping_address}</td>
-                  <td style={tdStyle}><strong>{Number(o.total_amount).toLocaleString('vi-VN')} đ</strong></td>
-                  <td style={tdStyle}>
-                    <select style={inputStyle} value={o.payment_status} onChange={(e) => updateStatus(o, o.status, e.target.value)}>
-                      <option value="unpaid">Chưa thanh toán</option><option value="paid">Đã thanh toán</option>
-                    </select>
-                  </td>
-                  <td style={tdStyle}>
-                    <select style={inputStyle} value={o.status} onChange={(e) => updateStatus(o, e.target.value, o.payment_status)}>
-                      <option value="pending">Chờ xác nhận</option><option value="confirmed">Đã xác nhận</option><option value="shipping">Đang giao hàng</option><option value="completed">Hoàn thành</option><option value="cancelled">Đã hủy</option>
-                    </select>
-                  </td>
-                  <td style={tdStyle}><button style={btnPrimary} onClick={() => viewDetails(o)}>Xem món</button></td>
-                </tr>
-              ))
-            )}
+            {orders.map((o) => (
+              <tr key={o.id}>
+                <td><strong>{o.order_code}</strong></td>
+                <td>
+                  <strong>{o.receiver_name}</strong>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{o.receiver_phone}</div>
+                </td>
+                <td style={{ maxWidth: '220px' }}>{o.shipping_address}</td>
+                <td><strong>{Number(o.total_amount).toLocaleString('vi-VN')} ₫</strong></td>
+                <td>
+                  <select className="form-control" style={{ padding: '0.35rem 0.5rem', fontSize: '0.85rem' }}
+                    value={o.payment_status} onChange={(e) => updateStatus(o, o.status, e.target.value)}>
+                    <option value="unpaid">Chưa thanh toán</option>
+                    <option value="paid">Đã thanh toán</option>
+                  </select>
+                </td>
+                <td>
+                  <select className="form-control" style={{ padding: '0.35rem 0.5rem', fontSize: '0.85rem' }}
+                    value={o.status} onChange={(e) => updateStatus(o, e.target.value, o.payment_status)}>
+                    <option value="pending">Chờ xác nhận</option>
+                    <option value="confirmed">Đã xác nhận</option>
+                    <option value="shipping">Đang giao</option>
+                    <option value="completed">Hoàn thành</option>
+                    <option value="cancelled">Đã hủy</option>
+                  </select>
+                </td>
+                <td>
+                  <button onClick={() => viewDetails(o)} className="btn btn-primary btn-sm">Xem</button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
+
       {selectedOrder && (
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-            <h3>Chi tiết đơn hàng #{selectedOrder.order_code}</h3>
-            <button style={btnSecondary} onClick={() => setSelectedOrder(null)}>Đóng</button>
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>Chi tiết đơn hàng #{selectedOrder.order_code}</h3>
+              <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '0.25rem' }}>
+                <span className="badge badge-info" style={{ marginRight: '0.5rem' }}>
+                  {selectedOrder.payment_method === 'bank_transfer' ? 'Chuyển khoản' : 'COD'}
+                </span>
+                {selectedOrder.note && <span>Ghi chú: {selectedOrder.note}</span>}
+              </div>
+            </div>
+            <button onClick={() => setSelectedOrder(null)} className="btn btn-outline btn-sm">Đóng</button>
           </div>
-          <table style={tableStyle}>
+
+          <table className="data-table">
             <thead>
-              <tr style={theadStyle}><th style={thStyle}>Tên sản phẩm lúc mua</th><th style={thStyle}>Đơn giá</th><th style={thStyle}>Số lượng</th><th style={thStyle}>Thành tiền</th></tr>
+              <tr>
+                <th>Tên sản phẩm lúc mua</th>
+                <th>Đơn giá</th>
+                <th>Số lượng</th>
+                <th>Thành tiền</th>
+              </tr>
             </thead>
             <tbody>
               {orderItems.map((it) => (
-                <tr key={it.id} style={trStyle}>
-                  <td style={tdStyle}>{it.product_name}</td><td style={tdStyle}>{Number(it.unit_price).toLocaleString('vi-VN')} đ</td><td style={tdStyle}>{it.quantity}</td><td style={tdStyle}><strong>{Number(it.unit_price * it.quantity).toLocaleString('vi-VN')} đ</strong></td>
+                <tr key={it.id}>
+                  <td>{it.product_name}</td>
+                  <td>{Number(it.unit_price).toLocaleString('vi-VN')} ₫</td>
+                  <td>{it.quantity}</td>
+                  <td><strong>{(Number(it.unit_price) * it.quantity).toLocaleString('vi-VN')} ₫</strong></td>
                 </tr>
               ))}
             </tbody>
@@ -518,63 +576,77 @@ function OrdersView() {
   );
 }
 
+/* ============================================================================
+   5. QUẢN LÝ TÀI KHOẢN NGƯỜI DÙNG (TRANG 5 FIGMA)
+============================================================================ */
 function UsersView() {
   const [users, setUsers] = useState([]);
-  const [errMsg, setErrMsg] = useState('');
 
   const load = () => {
-    setErrMsg('');
-    API.get('/api/users')
-      .then((res) => {
-        if (res.data?.success && Array.isArray(res.data.data)) setUsers(res.data.data);
-        else { setUsers([]); setErrMsg(res.data?.message || 'Không tải được danh sách người dùng.'); }
-      })
-      .catch((err) => { setUsers([]); setErrMsg(err.response?.data?.message || err.message); });
+    API.get('/api/users').then((res) => {
+      if (res.data?.success && Array.isArray(res.data.data)) setUsers(res.data.data);
+    });
   };
   useEffect(() => { load(); }, []);
 
-  const toggleActive = async (u) => {
-    await API.put(`/api/users/${u.id}`, { is_active: u.is_active ? 0 : 1, role_id: u.role_id });
+  const updateUser = async (u, nextActive, nextRoleId) => {
+    await API.put(`/api/users/${u.id}`, { is_active: nextActive, role_id: nextRoleId });
     load();
   };
 
   return (
     <div>
-      <h2 style={{ marginBottom: '1.5rem' }}>Quản lý tài khoản người dùng</h2>
-      {errMsg && <div style={errorBoxStyle}>Lỗi tải người dùng: {errMsg}</div>}
-      <div style={cardStyle}>
-        <table style={tableStyle}>
+      <h1 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '1.5rem' }}>Quản lý tài khoản người dùng</h1>
+
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <table className="data-table">
           <thead>
-            <tr style={theadStyle}><th style={thStyle}>ID</th><th style={thStyle}>Họ tên</th><th style={thStyle}>Email</th><th style={thStyle}>SĐT</th><th style={thStyle}>Vai trò</th><th style={thStyle}>Trạng thái</th><th style={thStyle}>Hành động</th></tr>
+            <tr>
+              <th>STT</th>
+              <th>Họ tên</th>
+              <th>Email</th>
+              <th>SĐT</th>
+              <th>Vai trò</th>
+              <th>Trạng thái</th>
+              <th>Hành động</th>
+            </tr>
           </thead>
           <tbody>
-            {users.length === 0 ? (
-              <tr><td colSpan="7" style={tdStyle}>Chưa có tài khoản nào.</td></tr>
-            ) : (
-              users.map((u) => (
-                <tr key={u.id} style={trStyle}>
-                  <td style={tdStyle}>{u.id}</td><td style={tdStyle}><strong>{u.full_name}</strong></td><td style={tdStyle}>{u.email}</td><td style={tdStyle}>{u.phone || '—'}</td><td style={tdStyle}><code>{u.role_name}</code></td>
-                  <td style={tdStyle}>{u.is_active ? <span style={{ color: '#16a34a', fontWeight: '600' }}>Hoạt động</span> : <span style={{ color: '#dc2626', fontWeight: '600' }}>Bị khóa</span>}</td>
-                  <td style={tdStyle}><button style={u.is_active ? btnDanger : btnPrimary} onClick={() => toggleActive(u)}>{u.is_active ? 'Khóa' : 'Mở khóa'}</button></td>
-                </tr>
-              ))
-            )}
+            {users.map((u, idx) => (
+              <tr key={u.id}>
+                <td>{idx + 1}</td>
+                <td><strong>{u.full_name}</strong></td>
+                <td>{u.email}</td>
+                <td>{u.phone || '—'}</td>
+                <td>
+                  <select
+                    className="form-control"
+                    style={{ width: 'auto', padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                    value={u.role_id}
+                    onChange={(e) => updateUser(u, u.is_active, Number(e.target.value))}
+                  >
+                    <option value={1}>customer</option>
+                    <option value={2}>admin</option>
+                  </select>
+                </td>
+                <td>
+                  <span className={`badge ${u.is_active ? 'badge-success' : 'badge-danger'}`}>
+                    {u.is_active ? 'Hoạt động' : 'Bị khóa'}
+                  </span>
+                </td>
+                <td>
+                  <button
+                    onClick={() => updateUser(u, u.is_active ? 0 : 1, u.role_id)}
+                    className={`btn btn-sm ${u.is_active ? 'btn-danger' : 'btn-primary'}`}
+                  >
+                    {u.is_active ? 'Khóa' : 'Mở khóa'}
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
     </div>
   );
 }
-
-const errorBoxStyle = { background: '#fee2e2', color: '#b91c1c', padding: '1rem', borderRadius: '6px', marginBottom: '1rem', border: '1px solid #fca5a5' };
-const cardStyle = { background: '#fff', padding: '1.5rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: '1.5rem' };
-const inputStyle = { width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' };
-const tableStyle = { width: '100%', borderCollapse: 'collapse', textAlign: 'left' };
-const theadStyle = { background: '#f8fafc', borderBottom: '2px solid #e2e8f0' };
-const thStyle = { padding: '0.75rem', fontSize: '0.9rem' };
-const trStyle = { borderBottom: '1px solid #e2e8f0' };
-const tdStyle = { padding: '0.75rem', fontSize: '0.9rem' };
-const btnPrimary = { padding: '0.45rem 0.9rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '0.4rem' };
-const btnSecondary = { padding: '0.45rem 0.9rem', background: '#64748b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' };
-const btnWarn = { padding: '0.35rem 0.75rem', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '0.4rem' };
-const btnDanger = { padding: '0.35rem 0.75rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' };

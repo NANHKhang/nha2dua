@@ -1,11 +1,64 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* Mega Menu phong cách Nhà Xinh */
+.mega-menu-panel {
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #cbd5e1;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  padding: 2rem 0;
 }
 
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background-color: #f1f5f9;
-  color: #1e293b;
+.mega-menu-layout {
+  display: grid;
+  grid-template-columns: 3fr 1fr;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.mega-menu-columns {
+  column-count: 4;
+  column-gap: 2rem;
+}
+
+.mega-cat-group {
+  break-inside: avoid;
+  margin-bottom: 1.5rem;
+}
+
+.mega-cat-parent {
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #0f172a;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.mega-cat-parent:hover {
+  color: #1d4ed8;
+}
+
+.mega-cat-item {
+  padding: 0.42rem 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.88rem;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mega-cat-item:hover {
+  color: #0f172a;
+  padding-left: 5px;
+  font-weight: 500;
+}
+
+@media (max-width: 900px) {
+  .mega-menu-layout {
+    grid-template-columns: 1fr;
+  }
+  .mega-menu-columns {
+    column-count: 2;
+  }
 }

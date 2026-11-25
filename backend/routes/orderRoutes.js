@@ -2,22 +2,42 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 
-// 1. Lấy danh sách đơn hàng (Admin)
+// Lấy danh sách đơn hàng (hỗ trợ lọc theo user_id nếu khách hàng xem đơn của mình)
 router.get('/', async (req, res) => {
+  const { user_id } = req.query;
   try {
-    const [rows] = await db.query(`
+    let sql = `
       SELECT o.*, u.email AS user_email 
       FROM orders o 
-      LEFT JOIN users u ON o.user_id = u.id 
-      ORDER BY o.created_at DESC
-    `);
-    res.json({ success: true, data: rows });
+      LEFT JOIN users u ON o.user_id = u.id
+    `;
+    const params = [];
+    if (user_id) {
+      sql += ' WHERE o.user_id = ?';
+      params.push(user_id);
+    }
+    sql += ' ORDER BY o.created_at DESC';
+
+    const [orders] = await db.query(sql, params);
+
+    // Nếu là khách hàng xem đơn của mình, lấy kèm chi tiết món ăn/sản phẩm trong từng đơn
+    if (user_id && orders.length > 0) {
+      const orderIds = orders.map((o) => o.id);
+      const [allItems] = await db.query('SELECT * FROM order_items WHERE order_id IN (?)', [orderIds]);
+      const ordersWithItems = orders.map((o) => ({
+        ...o,
+        items: allItems.filter((it) => it.order_id === o.id)
+      }));
+      return res.json({ success: true, data: ordersWithItems });
+    }
+
+    res.json({ success: true, data: orders });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// 2. Lấy chi tiết sản phẩm trong 1 đơn hàng
+// Lấy chi tiết sản phẩm trong 1 đơn hàng (Admin)
 router.get('/:id/items', async (req, res) => {
   try {
     const [items] = await db.query('SELECT * FROM order_items WHERE order_id = ?', [req.params.id]);
@@ -27,18 +47,15 @@ router.get('/:id/items', async (req, res) => {
   }
 });
 
-// 3. Tạo đơn hàng mới từ giỏ hàng của User
+// Tạo đơn hàng mới
 router.post('/', async (req, res) => {
   const { user_id, receiver_name, receiver_phone, shipping_address, payment_method, note, items } = req.body;
-
   if (!receiver_name || !receiver_phone || !shipping_address || !items || items.length === 0) {
-    return res.status(400).json({ success: false, message: 'Vui lòng nhập đủ thông tin nhận hàng và chọn ít nhất 1 sản phẩm!' });
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ thông tin nhận hàng và giỏ hàng!' });
   }
 
-  // Tạo mã đơn hàng 12 ký tự (CHAR(12))
   const orderCode = 'ORD' + Date.now().toString().slice(-9);
   const totalAmount = items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
-  // Nếu khách chưa đăng nhập thì gán tạm user_id = 2 (tài khoản khách mẫu trong DB)
   const customerId = user_id || 2;
 
   try {
@@ -49,8 +66,6 @@ router.post('/', async (req, res) => {
     );
 
     const orderId = orderResult.insertId;
-
-    // Lưu từng dòng sản phẩm vào order_items và trừ tồn kho
     for (const item of items) {
       await db.query(
         'INSERT INTO order_items (order_id, product_id, product_name, unit_price, quantity) VALUES (?, ?, ?, ?, ?)',
@@ -68,7 +83,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// 4. Cập nhật trạng thái đơn hàng (Admin)
+// Cập nhật trạng thái đơn hàng & thanh toán (Admin)
 router.put('/:id/status', async (req, res) => {
   const { status, payment_status } = req.body;
   try {
@@ -76,7 +91,7 @@ router.put('/:id/status', async (req, res) => {
       'UPDATE orders SET status = ?, payment_status = ? WHERE id = ?',
       [status, payment_status, req.params.id]
     );
-    res.json({ success: true, message: 'Cập nhật trạng thái đơn hàng thành công' });
+    res.json({ success: true, message: 'Cập nhật trạng thái thành công' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

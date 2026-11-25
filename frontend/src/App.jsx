@@ -13,6 +13,12 @@ export default function App() {
     setCurrentUser(user);
   };
 
+  const handleUpdateUser = (updatedFields) => {
+    const updated = { ...currentUser, ...updatedFields };
+    localStorage.setItem('furniture_user', JSON.stringify(updated));
+    setCurrentUser(updated);
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('furniture_user');
     setCurrentUser(null);
@@ -28,6 +34,7 @@ export default function App() {
     <UserLayout
       currentUser={currentUser}
       onLoginSuccess={handleLoginSuccess}
+      onUpdateUser={handleUpdateUser}
       onLogout={handleLogout}
     />
   );
